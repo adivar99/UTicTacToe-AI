@@ -1,8 +1,11 @@
 from board import Board
 from models import Position
 
-from typing import List
+import curses
+from curses import window, wrapper
+from typing import List, TYPE_CHECKING
 from pydantic import ValidationError
+
 
 # constants
 LETTERS = ["a", "b", "c", "d", "e", "f", "g", "h", "i"]
@@ -16,6 +19,11 @@ class Engine:
         self.o_board = Board()
         self.current_player = 0
         self.playing_board = 0
+        self.err = ""
+
+        # curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        # curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+        # curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
     def sgrid(self) -> List[str]:
         """
@@ -56,23 +64,30 @@ class Engine:
         )
         return pos
     
-    def show(self):
+    def __pos2rc(self, pos: Position):
+        pass
+    
+    def show(self, stdscr: window):
         """
         print the Game in the terminal
         """
-        sgrid = self.sgrid()
-        print(" ",TITLE_TEMPLATE)
+        stdscr.addstr(f"  {TITLE_TEMPLATE}\n")
         row = 0
+        out = ""
         while row<9:
             srow = {}
             for i in range(9):
                 pos = self.__rc2pos(row, i)
                 srow[LETTERS[i]] = self.get_svalue(pos)
-            print(row+1, end=" ")
-            print(ROW_TEMPLATE.format_map(srow))
+            out += f"{row+1} "
+            out += ROW_TEMPLATE.format_map(srow) + '\n'
             if (row+1) % 3 == 0 and row != 8:
-                print(" ", HOR_SEP)
+                out += f" {HOR_SEP}\n"
             row += 1
+        stdscr.addstr(out)
+        if self.err != "":
+            self.err += '\n'
+            stdscr.addstr(self.err)
 
     def next_player(self):
         """
@@ -117,26 +132,48 @@ class Engine:
         self.playing_board = 3*(row-1) + (col-1)
         if self.playing_board in self.x_board.won_boards or self.playing_board in self.o_board.won_boards:
             self.playing_board = 0
-        print("Playing board: ", self.playing_board)
 
-    def start_game(self):
+    def get_playing_range(self):
+        if self.playing_board == 0:
+            return "A-Z", "0-9"
+        
+        row, col = self.__pos2rc(Position(self.playing_board, 0, 0))
+        row_range = f"{LETTERS[row]}-{LETTERS[row+2]}"
+        col_range = f"{col}-{col+2}"
+        return row_range, col_range
+
+    def start_game(self, stdscr: window):
         """
         Kinda explains itself.
         """
+        out = ""
         while True:
-            self.show()
+            stdscr.clear()
+            self.show(stdscr)
+            self.err = ""
             splayer = "O" if self.current_player else "X"
-            turn = input(f"{splayer}'s Turn: ")
+            letter_range, num_range = self.get_playing_range()
+            stdscr.addstr(f"Possible range: [{letter_range}][{num_range}]\n")
+            stdscr.addstr(f"{splayer}'s Turn: {out}")
+            stdscr.refresh()
+            inp = stdscr.getkey()
+            if inp != '\n':
+                out += inp
+                continue
+            else:
+                turn = out
+                out = ""
             try:
+                print(f"TURN: {turn}")
                 pos = self.__rc2pos(int(turn[1])-1, LETTERS.index(turn[0].lower()))
             except ValidationError as ve:
-                print(f"Error: Incorrect Input. {ve}")
+                self.err = f"Error: Incorrect Input. {ve}"
                 continue
             ret, err = self.move(pos)
             if not ret:
-                print(f"Error: {err}.\nTry again.")
+                self.err = f"Error: {err}.\nTry again."
                 continue
-            print(pos.json())
+            # print(pos.json())
             if self.player_board().evaluate():
                 break
             self.next_player()
@@ -145,4 +182,4 @@ class Engine:
     
     
 game_engine = Engine()
-game_engine.start_game()
+wrapper(game_engine.start_game)
