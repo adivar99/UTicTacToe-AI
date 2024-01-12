@@ -65,7 +65,9 @@ class Engine:
         return pos
     
     def __pos2rc(self, pos: Position):
-        pass
+        row = 3 * (pos.board // 3) + pos.row - 1
+        col = 3 * (pos.board % 3 - 1) + pos.column
+        return row, col
     
     def show(self, stdscr: window):
         """
@@ -112,6 +114,7 @@ class Engine:
         validate the move and then add the move
         TODO: add more validation
         """
+        print(f"Is playing {self.playing_board+1} == {pos.board}")
         if self.playing_board !=0 and self.playing_board+1 != pos.board:
             return False, "Incorrect move. Please play in active board"
         
@@ -129,16 +132,18 @@ class Engine:
         """
         Set the active board after a move
         """
-        self.playing_board = 3*(row-1) + (col-1)
+        self.playing_board = 3*(row-1) + (col-1) + 1
+        print(f"Playing board: 3*({row}-1) + ({col}-1)={self.playing_board}")
         if self.playing_board in self.x_board.won_boards or self.playing_board in self.o_board.won_boards:
             self.playing_board = 0
 
     def get_playing_range(self):
         if self.playing_board == 0:
-            return "A-Z", "0-9"
+            return "A-I", "0-9"
         
-        row, col = self.__pos2rc(Position(self.playing_board, 0, 0))
-        row_range = f"{LETTERS[row]}-{LETTERS[row+2]}"
+
+        row, col = self.__pos2rc(Position(board=self.playing_board, row=1, column=1))
+        row_range = f"{LETTERS[row].upper()}-{LETTERS[row+2].upper()}"
         col_range = f"{col}-{col+2}"
         return row_range, col_range
 
@@ -165,8 +170,11 @@ class Engine:
                 out = ""
             try:
                 print(f"TURN: {turn}")
-                pos = self.__rc2pos(int(turn[1])-1, LETTERS.index(turn[0].lower()))
-            except ValidationError as ve:
+                row = int(turn[1])-1
+                col = LETTERS.index(turn[0].lower())
+                pos = self.__rc2pos(row, col)
+                print(f"Position: {pos.json()}")
+            except Exception as ve:
                 self.err = f"Error: Incorrect Input. {ve}"
                 continue
             ret, err = self.move(pos)
